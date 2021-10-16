@@ -1,0 +1,27 @@
+// Fonts
+@import url('https://fonts.googleapis.com/css?family=Nunito');
+
+// Variables
+@import 'variables';
+
+// Bootstrap
+@import '~bootstrap/scss/bootstrap';
+
+.table {
+
+  .sorting {
+    background-image: url('/img/sort_both.png');
+    background-repeat: no-repeat;
+    background-position: center right;
+  }
+  .sorting_asc {
+    background-image: url('/img/sort_asc.png');
+    background-repeat: no-repeat;
+    background-position: center right;
+  }
+  .sorting_desc {
+    background-image: url('/img/sort_desc.png');
+    background-repeat: no-repeat;
+    background-position: center right;
+  }
+}
