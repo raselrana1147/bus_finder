@@ -8,8 +8,8 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Session;
-
+use App\Draft;
+use App\Helper\OTP;
 
 class RegisterController extends Controller
 {
@@ -18,6 +18,7 @@ class RegisterController extends Controller
 
           $request->validate([
             'name' => 'required',
+            'email' => 'required|unique:users',
             'email' => 'required|unique:users',
             'phone' => 'required|unique:users',
             'password' => 'required',
@@ -31,58 +32,57 @@ class RegisterController extends Controller
 
             try{
 
-                $otp=rand(99999,10000);
-         
-                $username="artificialsoft";
-                $password="artisoft@bd#321";
-                $sender="8809612440560";
-                $message="please OTP".$otp;
-                $code="88";
-                $api="http://api.icombd.com/api/v2/sendsms/plaintext";
+                    $otp=rand(99999,10000);
 
-                $curl = curl_init();
+                    $info_phone=Draft::where('phone',$request->phone)->first();
+                    $info_email=Draft::where('email',$request->email)->first();
 
-                 $credential =[
-                     "username"=>$username,
-                     "password"=>$password,
-                     "sender"=>$sender,
-                     "message"=>$message,
-                     "to"=>$code.$request->phone
-                 ];
+                    if (!is_null($info_phone)) {
 
-                 curl_setopt_array($curl, array(
-                 CURLOPT_URL =>$api,
-                 CURLOPT_RETURNTRANSFER => true,
-                 CURLOPT_ENCODING =>"",
-                 CURLOPT_MAXREDIRS => 10,
-                 CURLOPT_TIMEOUT => 30,
-                 CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                 CURLOPT_CUSTOMREQUEST => "POST",
-                 CURLOPT_POSTFIELDS => json_encode($credential),
-                 CURLOPT_HTTPHEADER => array(
-                 "Content-Type: application/json",
-                 ),
-                 ));
+                        $info_phone->name        =$request->name;
+                        $info_phone->email       =$request->email;
+                        $info_phone->phone       =$request->phone;
+                        $info_phone->user_role_id=$request->user_role_id;
+                        $info_phone->password    =$request->password;
+                        $info_phone->otp         =$otp;
+                        $info_phone->save();
 
-                   Session::forget("phone_otp");
-                   Session::forget("user_info");
-                
+                         $message="Please use this ".$otp." OTP to continue your registration process";
+                         $to=$request->phone;
 
-                   Session::put("phone_otp", $otp);
-                  
-                   $info=array(
-                               'name'=>$request->name,
-                               'email'=>$request->email,
-                               'phone'=>$request->phone,
-                               'user_role_id'=>$request->user_role_id,
-                               'password'=>$request->password
-                           );
+                         OTP::send_otp($message,$to);
 
-                   Session::put("user_info", $info);
+                    }elseif(!is_null($info_email)){
 
-                   curl_exec($curl);
-                 
-               
+                        $info_email->name        =$request->name;
+                        $info_email->email       =$request->email;
+                        $info_email->phone       =$request->phone;
+                        $info_email->user_role_id=$request->user_role_id;
+                        $info_email->password    =$request->password;
+                        $info_email->otp         =$otp;
+                        $info_phone->save();
+
+                         $message="Please use this ".$otp." OTP to continue your registration process";
+                         $to=$request->phone;
+                         OTP::send_otp($message,$to);
+                         
+                    }else{
+
+                        $draft              =new Draft();
+                        $draft->name        =$request->name;
+                        $draft->email       =$request->email;
+                        $draft->phone       =$request->phone;
+                        $draft->user_role_id=$request->user_role_id;
+                        $draft->password    =$request->password;
+                        $draft->otp         =$otp;
+                        $draft->save();
+
+                         $message="Please use this ".$otp." OTP to continue your registration process";
+                         $to=$request->phone;
+
+                         OTP::send_otp($message,$to);
+                }
+
                 DB::commit();
                 return \response()->json([
                     'message' => 'You have benn sent an OTP',
@@ -109,48 +109,37 @@ class RegisterController extends Controller
 
          $request->validate([
             'otp' => 'required',
+            'phone'=>'required'
         ]);
 
+         $draft=Draft::where('phone',$request->phone)
+         ->where('otp',$request->otp)
+         ->orderBy('id','DESC')->first();
 
-          $get_opt= Session::get("phone_otp");
+         if (!is_null($draft)) {
 
-         if (Session::has("phone_otp")) {
-             $get_opt= Session::get("phone_otp");
-             if ($get_opt !="") {
+             $user=new User();
+             $user->name=$draft->name;
+             $user->email=$draft->email;
+             $user->phone=$draft->phone;
+             $user->password=bcrypt($draft->password);
+             $user->user_role_id=$draft->user_role_id;
+             $user->save();
+             $draft->delete();
 
-                 if ($get_opt==$request->otp) {
-                     $info=Session::get('user_info');
-                     $user=new User();
-                     $user->name=$info['name'];
-                     $user->email=$info['email'];
-                     $user->password=bcrypt($info['password']);
-                     $user->phone=$info['phone'];
-                     $user->user_role_id=$info['user_role_id'];
-                     $user->save();
-
-                     Session::forget("phone_otp");
-                     Session::forget("user_info");
-
-                     return \response()->json([
-                     'message' => "Successfully registered",
-                     'status_code' => 200
-                    ],Response::HTTP_OK);
-
-                 }else{
-                     return \response()->json([
-                     'message' => "Your Provided OTP not match",
-                     'status_code' => 500
-                    ],Response::HTTP_INTERNAL_SERVER_ERROR);
-                }
-             }
-             
-         }else{
-           
              return \response()->json([
-                    'message' => "You did not send any OTP",
-                    'status_code' => 400
-                 ]);
+                'message' => "Your registration completed successfully",
+                'status_code' => 200
+             ],Response::HTTP_OK);
+
+         }else{
+            return \response()->json([
+                'message' => "Credentials did not match",
+                'status_code' => 500
+             ],Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+         
+        
     }
 
     public function exist_phone(Request $request){
@@ -162,12 +151,14 @@ class RegisterController extends Controller
 
         if (!is_null($data)) {
              return response()->json([
-                    'message' => 1,
+                    'message' => "this user already taken",
+                    'code'=>1,
                     'status_code' => 200
                 ],Response::HTTP_OK);
         }else{
                 return response()->json([
-                    'message' => 0,
+                    'message' => "This is available for registration",
+                    'code'=>0,
                     'status_code' => 200
                 ],Response::HTTP_OK);   
         }
